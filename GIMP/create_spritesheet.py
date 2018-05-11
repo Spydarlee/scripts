@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# License: Public Domain - https://creativecommons.org/share-your-work/public-domain/cc0/
 
 from gimpfu import *
 import math
