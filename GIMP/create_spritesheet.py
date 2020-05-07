@@ -4,7 +4,7 @@
 from gimpfu import *
 import math
 
-def create_spritesheet(image, singleRow):
+def create_spritesheet(image, singleRow, resizeLayers):
 
     # Grab all the layers from the original image, each one of which will become an animation frame
     layers = image.layers
@@ -32,6 +32,10 @@ def create_spritesheet(image, singleRow):
     # Loop over our spritesheet grid filling each one row at a time
     for y in xrange(0, numRows):
         for x in xrange(0, numCols):
+            
+            # Make sure all layers are the same size (original image size)
+            if resizeLayers:
+                layers[layerIndex].resize_to_image_size()
 
             # Copy the layer's contents and paste it into a "floating" layer in the new image
             pdb.gimp_edit_copy(layers[layerIndex])
@@ -75,7 +79,8 @@ register(
     "*",
     [
         (PF_IMAGE, 'image', 'Input image:', None),
-        (PF_BOOL, "singleRow", "Output to a single row?", FALSE)
+        (PF_BOOL, "singleRow", "Output to a single row?", FALSE),
+        (PF_BOOL, "resizeLayers", "Resize layers to image size?", TRUE)
     ],
     [],
     create_spritesheet, menu="<Image>/Filters/Animation/")
