@@ -1,18 +1,34 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # License: Public Domain - https://creativecommons.org/share-your-work/public-domain/cc0/
 
 from gimpfu import *
 import math
 
-def create_spritesheet(image, singleRow):
+def create_spritesheet(image, singleRow, widthCells, heightCells):
 
     # Grab all the layers from the original image, each one of which will become an animation frame
     layers = image.layers
     numLayers = len(layers)
 
     # Work out how many rows and columns we need for each of our layers/animation frames
-    numRows = 1 if singleRow else int(math.ceil(math.sqrt(numLayers)))
-    numCols = numLayers if singleRow else numRows
+    if singleRow:
+        numRows = 1
+        numCols=numLayers
+    else:
+        if widthCells != 0 or heightCells !=0:
+            if widthCells !=0 and heightCells !=0: #fixed
+                numRows=heightCells
+                numCols=widthCells
+            else:
+                if widthCells !=0: #width given, calculate height
+                    numCols=widthCells
+                    numRows=int(math.ceil(numLayers/widthCells))
+                else: #height given, calculate width
+                    numRows=heightCells
+                    numCols=int(math.ceil(numLayers/heightCells))
+        else: #auto
+            numRows=int(math.ceil(math.sqrt(numLayers)))
+            numCols=numRows
 
     # And then determine the size of our new image based on the number of rows and columns
     newImgWidth = image.width * numCols
@@ -32,10 +48,20 @@ def create_spritesheet(image, singleRow):
     # Loop over our spritesheet grid filling each one row at a time
     for y in xrange(0, numRows):
         for x in xrange(0, numCols):
-
+            #Pre-process the layer to make sure we copy over a layer with a size the same as the image
+            
+            #Get layer's size and offsets to restore after copying its contents over
+            lOffX, lOffY=pdb.gimp_drawable_offsets(layers[layerIndex])
+            lW=pdb.gimp_drawable_width(layers[layerIndex])
+            lH=pdb.gimp_drawable_height(layers[layerIndex])
+            #Resize the layer to image size
+            pdb.gimp_layer_resize_to_image_size(layers[layerIndex])
             # Copy the layer's contents and paste it into a "floating" layer in the new image
             pdb.gimp_edit_copy(layers[layerIndex])
             floatingLayer = pdb.gimp_edit_paste(newLayer, TRUE)
+            #Restore the original layer's size and offsets
+            pdb.gimp_layer_resize(layers[layerIndex], lW, lH, -lOffX, -lOffY)
+
 
             # This floating layer will default to the center of the new image so we first shift to the top left
             # corner (0, 0) and and then shift to correct grid position based on current row and column index
@@ -68,14 +94,16 @@ register(
     "python_fu_create_spritesheet",
     "Creates a spritesheet (in a new image) from the layers of the current image.",
     "Creates a spritesheet (in a new image) from the layers of the current image.",
-    "Karn Bianco",
-    "Karn Bianco",
+    "Author: Karn Bianco. Contributors: Eneko Castresana",
+    "Author: Karn Bianco. Contributors: Eneko Castresana",
     "2018",
     "Create Spritesheet",
     "*",
     [
         (PF_IMAGE, 'image', 'Input image:', None),
-        (PF_BOOL, "singleRow", "Output to a single row?", FALSE)
+        (PF_BOOL, "singleRow", "Output to a single row?", FALSE),
+        (PF_INT, "widthCells", "Width cells (0 for auto)", 0),
+        (PF_INT, "heightCells", "Height cells (0 for auto)", 0)
     ],
     [],
     create_spritesheet, menu="<Image>/Filters/Animation/")
