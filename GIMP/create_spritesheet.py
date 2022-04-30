@@ -4,57 +4,69 @@
 from gimpfu import *
 import math
 
-def create_spritesheet(image, singleRow):
+def create_spritesheet(image, tileLayout, spriteCenter):
 
     # Grab all the layers from the original image, each one of which will become an animation frame
     layers = image.layers
     numLayers = len(layers)
 
-    # Work out how many rows and columns we need for each of our layers/animation frames
-    numRows = 1 if singleRow else int(math.ceil(math.sqrt(numLayers)))
-    numCols = numLayers if singleRow else numRows
+    # Deterime how many rows and columns we need for each of our layers/animation frames
+    if (tileLayout == 1):
+        numCols = int(math.ceil(math.sqrt(numLayers)))
+        numRows = int(math.ceil(1.0 * numLayers / numCols))
+    else:
+        numRows = 1 if (tileLayout == 2) else numLayers # Single row
+        numCols = 1 if (tileLayout == 3) else numLayers # Single column
 
-    # And then determine the size of our new image based on the number of rows and columns
-    newImgWidth = image.width * numCols
-    newImgHeight = image.height * numRows
+    # Determine frame sizes = current image size
+    frameWidth = image.width
+    frameHeight = image.height
+    
+    # Determine new image size, based on the number of rows and columns
+    newImgWidth = frameWidth * numCols
+    newImgHeight = frameHeight * numRows
 
     # Create a new image and a single layer that fills the entire canvas
     newImage = gimp.Image(newImgWidth, newImgHeight, RGB)
     newLayer = gimp.Layer(newImage, "Spritesheet", newImgWidth, newImgHeight, RGBA_IMAGE, 100, NORMAL_MODE)
     newImage.add_layer(newLayer, 1)
 
-    # Clear any selections on the original image to esure we copy each layer in its entirety
-    pdb.gimp_selection_none(image)
+    # Select image size to ensure uniformly-sized frames (i.e. when original layer is larger than image then "crop" to image size)
+    pdb.gimp_selection_all(image)
 
-    # Layers are in the reverse order we want them so start at the end of the list and work backwards
-    layerIndex = (numLayers - 1)
+    # go through all layers (GIMP Layers used to be in the reverse order, not anymore)
+    layerIndex = 0
 
     # Loop over our spritesheet grid filling each one row at a time
     for y in xrange(0, numRows):
         for x in xrange(0, numCols):
+            # check layerIndex because it's possible there are less layers than grid positions
+            # i.e. cannot always fill out entire grid, last tile positions will just be empty
+            if layerIndex < numLayers:
+                # Copy the layer's contents and paste it into a "floating" layer in the new image
+                pdb.gimp_edit_copy(layers[layerIndex])
+                floatingLayer = pdb.gimp_edit_paste(newLayer, TRUE)
 
-            # Copy the layer's contents and paste it into a "floating" layer in the new image
-            pdb.gimp_edit_copy(layers[layerIndex])
-            floatingLayer = pdb.gimp_edit_paste(newLayer, TRUE)
+                # Arrange frames as tiles from top-left to bottom-right
+                xPos = x * frameWidth
+                yPos = y * frameHeight
+                
+                # Floating layer defaults to center, get current offset and corrent for desired position
+                xOffset, yOffset = floatingLayer.offsets
+                xOffset = xPos - xOffset
+                yOffset = yPos - yOffset
 
-            # This floating layer will default to the center of the new image so we first shift to the top left
-            # corner (0, 0) and and then shift to correct grid position based on current row and column index
-            xOffset = (-newImgWidth/2) + (image.width/2) + (x * image.width)
-            yOffset = (-newImgHeight/2) + (image.height/2) + (y * image.height)
+                # center if needed (i.e. when layer size is smaller than frame size)
+                if spriteCenter and (floatingLayer.width < frameWidth):
+                    xOffset += (frameWidth - floatingLayer.width) / 2
+                if spriteCenter and (floatingLayer.height < frameHeight):
+                    yOffset += (frameHeight - floatingLayer.height) / 2
 
-            # GIMP will only copy non-transparent pixels, so if our image contains transparency
-            # the new floating layer may be smaller than we want which will cause animation issues.
-            # To resolve this we adjust our position by the difference in layer size to ensure everything aligns
-            xOffset += (image.width - floatingLayer.width) / 2
-            yOffset += (image.height - floatingLayer.height) / 2
+                # Move the floating layer into the correct position
+                pdb.gimp_layer_translate(floatingLayer, xOffset, yOffset)
 
-            # Move the floating layer into the correct position
-            pdb.gimp_layer_translate(floatingLayer, xOffset, yOffset)
-
-            # Move to the next layer, unless we're all done in which case exit!
-            layerIndex = (layerIndex - 1)
-            if layerIndex < 0:
-                break;
+                # Move to the next layer index
+                layerIndex = layerIndex + 1
 
     # Merge the last floating layer into our final 'Spritesheet' layer
     pdb.gimp_image_merge_visible_layers(newImage, 0)
@@ -66,16 +78,17 @@ def create_spritesheet(image, singleRow):
 # Register the plugin with Gimp so it appears in the filters menu
 register(
     "python_fu_create_spritesheet",
-    "Creates a spritesheet (in a new image) from the layers of the current image.",
-    "Creates a spritesheet (in a new image) from the layers of the current image.",
+    "Creates a new spritesheet image, from the layers of the current image.",
+    "Creates a new spritesheet image, from the layers of the current image.",
     "Karn Bianco",
     "Karn Bianco",
     "2018",
     "Create Spritesheet",
     "*",
     [
-        (PF_IMAGE, 'image', 'Input image:', None),
-        (PF_BOOL, "singleRow", "Output to a single row?", FALSE)
+        (PF_IMAGE, "image", "Input image:", None),
+        (PF_RADIO, "tileLayout", "Spritesheet layout:", 1, (("Grid", 1), ("Single row", 2), ("Single column", 3))),
+        (PF_BOOL, "spriteCenter", "Center sprite in frame\n(when sprites are smaller)", TRUE)
     ],
     [],
     create_spritesheet, menu="<Image>/Filters/Animation/")
